@@ -15,3 +15,5 @@ export interface Team {
   name: string;
   members: TeamMember[];
 }
+
+export type DivisionMode = 'spread' | 'concentrate';

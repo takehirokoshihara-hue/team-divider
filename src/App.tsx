@@ -8,7 +8,7 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
-import type { Team, Member, TeamMember } from './types';
+import type { Team, Member, TeamMember, DivisionMode } from './types';
 import { createInitialMembers, generateMemberId } from './data/members';
 import { divideTeams, moveMemberBetweenTeams } from './utils/teamDivider';
 import { exportToPdf } from './utils/exportPdf';
@@ -35,17 +35,18 @@ function saveBaseMembers(members: Member[]) {
 }
 
 export default function App() {
-  // 固定メンバー (localStorage永続化)
   const [baseMembers, setBaseMembers] = useState<Member[]>(() => loadBaseMembers());
-  // 臨時メンバー (セッション限り)
   const [tempMembers, setTempMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeMember, setActiveMember] = useState<TeamMember | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [showMgmt, setShowMgmt] = useState(false);
+  // 列数設定（1=リスト表示、2以上=グリッド表示）
+  const [columnsPerTeam, setColumnsPerTeam] = useState(1);
+  // 直前のdivisionModeを保持（再シャッフル時に再利用）
+  const [lastDivisionMode, setLastDivisionMode] = useState<DivisionMode>('spread');
 
-  // 全参加メンバー = 固定 + 臨時
   const allMembers = [...baseMembers, ...tempMembers];
 
   const sensors = useSensors(
@@ -63,7 +64,6 @@ export default function App() {
   }, []);
 
   const handleRemoveMember = useCallback((id: string) => {
-    // tempメンバー or baseメンバーのどちらかを削除
     setTempMembers((prev) => prev.filter((m) => m.id !== id));
     setBaseMembers((prev) => {
       const next = prev.filter((m) => m.id !== id);
@@ -72,11 +72,23 @@ export default function App() {
     });
   }, []);
 
-  const handleGenerate = useCallback((teamCount: number) => {
-    const newTeams = divideTeams(allMembers, teamCount);
+  const handleGenerate = useCallback((teamCount: number, mode: DivisionMode) => {
+    setLastDivisionMode(mode);
+    const newTeams = divideTeams(allMembers, teamCount, mode);
     setTeams(newTeams);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseMembers, tempMembers]);
+
+  const handleReshuffle = useCallback(() => {
+    setTeams((prev) => divideTeams(allMembers, prev.length, lastDivisionMode));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseMembers, tempMembers, lastDivisionMode]);
+
+  const handleRenameTeam = useCallback((teamId: string, newName: string) => {
+    setTeams((prev) =>
+      prev.map((t) => (t.id === teamId ? { ...t, name: newName } : t))
+    );
+  }, []);
 
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
@@ -179,6 +191,32 @@ export default function App() {
         <aside className="w-72 flex-shrink-0 flex flex-col gap-4 self-start sticky top-24">
           <TeamSettings memberCount={allMembers.length} onGenerate={handleGenerate} />
 
+          {/* 座席列数設定 */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="font-semibold text-gray-700 mb-3 text-sm">座席レイアウト</h3>
+            <label className="text-xs text-gray-500 mb-1.5 block">1行あたりの列数</label>
+            <div className="flex gap-1.5 flex-wrap">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setColumnsPerTeam(n)}
+                  className={`w-9 h-9 text-sm font-bold rounded-lg border transition-colors ${
+                    columnsPerTeam === n
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  {n === 1 ? '≡' : n}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {columnsPerTeam === 1
+                ? 'リスト表示'
+                : `${columnsPerTeam}列グリッド（座席表風）`}
+            </p>
+          </div>
+
           {/* アルゴリズム凡例 */}
           <div className="bg-white rounded-xl border border-gray-200 p-3 text-xs text-gray-600 space-y-1">
             <p className="font-semibold text-gray-700 mb-2">チーム分けルール</p>
@@ -219,10 +257,10 @@ export default function App() {
                   <span className="font-medium text-gray-700">
                     {teams.reduce((sum, t) => sum + t.members.length, 0)}人
                   </span>
-                  ・ドラッグ＆ドロップで移動できます
+                  ・ドラッグ＆ドロップで移動、チーム名クリックで編集
                 </p>
                 <button
-                  onClick={() => handleGenerate(teams.length)}
+                  onClick={handleReshuffle}
                   className="text-xs text-blue-600 hover:text-blue-800 border border-blue-300 hover:border-blue-500 px-3 py-1 rounded-lg transition-colors"
                 >
                   再シャッフル
@@ -231,7 +269,13 @@ export default function App() {
 
               <div className={`grid ${gridCols} gap-4`}>
                 {teams.map((team) => (
-                  <TeamCard key={team.id} team={team} activeId={activeId} />
+                  <TeamCard
+                    key={team.id}
+                    team={team}
+                    activeId={activeId}
+                    columnsPerTeam={columnsPerTeam}
+                    onRename={handleRenameTeam}
+                  />
                 ))}
               </div>
 
@@ -263,7 +307,6 @@ export default function App() {
         </main>
       </div>
 
-      {/* Member Management Modal */}
       {showMgmt && (
         <MemberManagementModal
           members={baseMembers}

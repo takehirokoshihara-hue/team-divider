@@ -1,21 +1,23 @@
 import { useState } from 'react';
+import type { DivisionMode } from '../types';
 
 interface TeamSettingsProps {
   memberCount: number;
-  onGenerate: (teamCount: number) => void;
+  onGenerate: (teamCount: number, mode: DivisionMode) => void;
 }
 
 export function TeamSettings({ memberCount, onGenerate }: TeamSettingsProps) {
   const [mode, setMode] = useState<'teamCount' | 'perTeam'>('teamCount');
   const [teamCount, setTeamCount] = useState(4);
   const [perTeam, setPerTeam] = useState(5);
+  const [divisionMode, setDivisionMode] = useState<DivisionMode>('spread');
 
   const handleGenerate = () => {
     if (mode === 'teamCount') {
-      onGenerate(teamCount);
+      onGenerate(teamCount, divisionMode);
     } else {
       const count = Math.ceil(memberCount / perTeam);
-      onGenerate(Math.max(1, count));
+      onGenerate(Math.max(1, count), divisionMode);
     }
   };
 
@@ -84,6 +86,38 @@ export function TeamSettings({ memberCount, onGenerate }: TeamSettingsProps) {
       )}
 
       <p className="text-xs text-gray-400 mb-3">{preview}</p>
+
+      {/* 分散/集中モード切り替え */}
+      <div className="mb-4">
+        <label className="text-xs text-gray-500 mb-1.5 block">部署配置モード</label>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setDivisionMode('spread')}
+            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-colors ${
+              divisionMode === 'spread'
+                ? 'bg-emerald-600 text-white border-emerald-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'
+            }`}
+          >
+            🔀 分散モード
+          </button>
+          <button
+            onClick={() => setDivisionMode('concentrate')}
+            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-colors ${
+              divisionMode === 'concentrate'
+                ? 'bg-amber-500 text-white border-amber-500'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-amber-400'
+            }`}
+          >
+            🏢 集中モード
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5">
+          {divisionMode === 'spread'
+            ? '同部署が別チームに分かれるよう均等配分'
+            : '同部署が同チームにまとまるよう集中配置'}
+        </p>
+      </div>
 
       <button
         onClick={handleGenerate}

@@ -5,6 +5,7 @@ interface MemberCardProps {
   member: TeamMember;
   teamId: string;
   isDragging?: boolean;
+  compact?: boolean;
 }
 
 const DEPT_COLORS: Record<string, string> = {
@@ -27,7 +28,7 @@ function getDeptColor(dept: string): string {
   return DEPT_COLORS[dept] ?? 'bg-gray-100 text-gray-700';
 }
 
-export function MemberCard({ member, teamId, isDragging = false }: MemberCardProps) {
+export function MemberCard({ member, teamId, isDragging = false, compact = false }: MemberCardProps) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: `${teamId}::${member.id}`,
     data: { memberId: member.id, teamId },
@@ -36,6 +37,44 @@ export function MemberCard({ member, teamId, isDragging = false }: MemberCardPro
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
+
+  if (compact) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...listeners}
+        {...attributes}
+        className={`
+          flex flex-col items-center gap-1 p-2 rounded-lg border cursor-grab active:cursor-grabbing
+          transition-shadow select-none text-center
+          ${member.isManager
+            ? 'bg-blue-50 border-blue-200 hover:border-blue-400'
+            : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'}
+          ${isDragging ? 'shadow-lg opacity-80' : ''}
+        `}
+      >
+        <span
+          className={`w-6 h-6 rounded-full text-white text-xs font-bold flex items-center justify-center flex-shrink-0
+            ${member.isManager ? 'bg-blue-600' : 'bg-gray-500'}`}
+        >
+          {member.seatNumber}
+        </span>
+        <div className="w-full min-w-0">
+          <div className="flex items-center justify-center gap-0.5 flex-wrap">
+            {member.isManager && (
+              <span className="text-xs bg-blue-600 text-white px-1 rounded font-bold leading-none">MG</span>
+            )}
+            {member.isTalkative && <span className="text-xs">🔥</span>}
+          </div>
+          <p className="text-xs font-medium text-gray-900 leading-tight break-all">{member.name}</p>
+        </div>
+        <span className={`text-xs px-1 py-0.5 rounded-full font-medium leading-none w-full text-center truncate ${getDeptColor(member.department)}`}>
+          {member.department}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
